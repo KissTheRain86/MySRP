@@ -32,16 +32,22 @@ public class CameraRenderer
     }
     void DrawVisibleGeometry()
     {
-        context.DrawSkybox(camera);//直接使用了 SRP 的内部管线 不需要commandbuffer
+      
         var sortingSettings = new SortingSettings(camera)
         {
             criteria = SortingCriteria.CommonOpaque
         };
         var drawingSettings = new DrawingSettings(
             unlitShaderTagId,sortingSettings);
-        var filteringSetting = new FilteringSettings(RenderQueueRange.all);
+        var filteringSetting = new FilteringSettings(RenderQueueRange.opaque);
         context.DrawRenderers(cullingResults, ref drawingSettings, ref filteringSetting);
-       
+        context.DrawSkybox(camera);//直接使用了 SRP 的内部管线 不需要commandbuffer
+
+        //render transparent
+        sortingSettings.criteria = SortingCriteria.CommonTransparent;
+        drawingSettings.sortingSettings = sortingSettings;
+        filteringSetting.renderQueueRange = RenderQueueRange.transparent;
+        context.DrawRenderers(cullingResults,ref drawingSettings,ref filteringSetting);
     }
 
     void Submit()
