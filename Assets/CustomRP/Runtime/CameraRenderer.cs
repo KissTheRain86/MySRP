@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public class CameraRenderer
+public partial class CameraRenderer
 {
     ScriptableRenderContext context;
     Camera camera;
@@ -12,26 +12,17 @@ public class CameraRenderer
     CullingResults cullingResults;
     static ShaderTagId unlitShaderTagId = new ShaderTagId("SRPDefaultUnlit");
 
-    static ShaderTagId[] legacyShaderTagIds =
-    {
-        new ShaderTagId("Always"),
-        new ShaderTagId("ForwardBase"),
-        new ShaderTagId("PrepassBase"),
-        new ShaderTagId("Vertex"),
-        new ShaderTagId("VertexLMRGBM"),
-        new ShaderTagId("VertexLM")
-    };
-
-    static Material errorMaterial;
-
     public void Render(ScriptableRenderContext context,Camera camera)
     {
         this.context = context;
         this.camera = camera;
+        PrepareBuffer();
+        PrepareForSceneWindow();
         if (!Cull()) return;
         Setup();
         DrawVisibleGeometry();
         DrawUnsupportedShaders();
+        DrawGizmos();
         Submit();
     }
     void Setup()
@@ -39,8 +30,13 @@ public class CameraRenderer
         //应该先于clear 否则Unity 不能确定当前 RT、视图矩阵等
         //只能通过 Draw GL 绘制一个全屏 Quad 清理颜色（效率较低）
         context.SetupCameraProperties(camera);
-        buffer.ClearRenderTarget(true, true, Color.clear);
-        buffer.BeginSample(bufferName);
+        CameraClearFlags flags = camera.clearFlags;//得到摄像机设置的flag
+        buffer.ClearRenderTarget(
+            flags <= CameraClearFlags.Depth, 
+            flags <= CameraClearFlags.Color, 
+            flags == CameraClearFlags.Color? 
+                camera.backgroundColor.linear:Color.clear);
+        buffer.BeginSample(SampleName);
         ExecuteBuffer();
     }
     void DrawVisibleGeometry()
@@ -65,29 +61,9 @@ public class CameraRenderer
     }
 
     //旧的shader 用粉色材质绘制
-    void DrawUnsupportedShaders()
-    {
-        if (errorMaterial == null)
-        {
-            errorMaterial = new Material(Shader.Find("Hidden/InternalErrorShader"));
-        }
-        var drawingSettings = new DrawingSettings(legacyShaderTagIds[0], new SortingSettings(camera))
-        {
-            overrideMaterial = errorMaterial
-        };
-        for (int i = 0; i < legacyShaderTagIds.Length; i++)
-        {
-            drawingSettings.SetShaderPassName(i, legacyShaderTagIds[i]);
-        }
-        var filteringSetting = FilteringSettings.defaultValue;
-        context.DrawRenderers(cullingResults, ref drawingSettings, ref filteringSetting);
-
-       
-    }
-
     void Submit()
     {
-        buffer.EndSample(bufferName);
+        buffer.EndSample(SampleName);
         ExecuteBuffer();
         context.Submit();
     }
