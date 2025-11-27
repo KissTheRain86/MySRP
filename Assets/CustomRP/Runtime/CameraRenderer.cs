@@ -12,6 +12,18 @@ public class CameraRenderer
     CullingResults cullingResults;
     static ShaderTagId unlitShaderTagId = new ShaderTagId("SRPDefaultUnlit");
 
+    static ShaderTagId[] legacyShaderTagIds =
+    {
+        new ShaderTagId("Always"),
+        new ShaderTagId("ForwardBase"),
+        new ShaderTagId("PrepassBase"),
+        new ShaderTagId("Vertex"),
+        new ShaderTagId("VertexLMRGBM"),
+        new ShaderTagId("VertexLM")
+    };
+
+    static Material errorMaterial;
+
     public void Render(ScriptableRenderContext context,Camera camera)
     {
         this.context = context;
@@ -19,6 +31,7 @@ public class CameraRenderer
         if (!Cull()) return;
         Setup();
         DrawVisibleGeometry();
+        DrawUnsupportedShaders();
         Submit();
     }
     void Setup()
@@ -33,6 +46,7 @@ public class CameraRenderer
     void DrawVisibleGeometry()
     {
       
+        // render opaque
         var sortingSettings = new SortingSettings(camera)
         {
             criteria = SortingCriteria.CommonOpaque
@@ -48,6 +62,27 @@ public class CameraRenderer
         drawingSettings.sortingSettings = sortingSettings;
         filteringSetting.renderQueueRange = RenderQueueRange.transparent;
         context.DrawRenderers(cullingResults,ref drawingSettings,ref filteringSetting);
+    }
+
+    //旧的shader 用粉色材质绘制
+    void DrawUnsupportedShaders()
+    {
+        if (errorMaterial == null)
+        {
+            errorMaterial = new Material(Shader.Find("Hidden/InternalErrorShader"));
+        }
+        var drawingSettings = new DrawingSettings(legacyShaderTagIds[0], new SortingSettings(camera))
+        {
+            overrideMaterial = errorMaterial
+        };
+        for (int i = 0; i < legacyShaderTagIds.Length; i++)
+        {
+            drawingSettings.SetShaderPassName(i, legacyShaderTagIds[i]);
+        }
+        var filteringSetting = FilteringSettings.defaultValue;
+        context.DrawRenderers(cullingResults, ref drawingSettings, ref filteringSetting);
+
+       
     }
 
     void Submit()
